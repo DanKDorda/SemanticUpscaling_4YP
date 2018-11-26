@@ -19,6 +19,8 @@ def define_G(input_nc, output_nc, n_phases):
     netG = GlobalGenerator(input_nc, output_nc, n_phases)
     netG.apply(weights_init)
 
+    return netG
+
 
 def define_D():
     pass
@@ -62,7 +64,7 @@ class GlobalGenerator(nn.Module):
         model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
         self.models += nn.Sequential(*model)
         ## add layers for phases
-        for n in range(n_phases - 1):
+        for n in range(n_phases - 2):
             mult = 1
             # mult = 2**n
             # down
@@ -76,13 +78,16 @@ class GlobalGenerator(nn.Module):
                       norm_layer(int(ngf * mult / 2)), activation]
             self.models += nn.Sequential(*model)
 
+        model = [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1), norm_layer(ngf), activation]
+        self.models += nn.Sequential(*model)
+
     def forward(self, input, phase, blending):
         assert phase <= self.n_phases
 
-        output = self.model[0](input)
+        output = self.models[0](input)
         for idx, model in enumerate(self.models[1:phase]):
             if idx == phase:
-                output = blending * output + (1 - blending) * model(output)
+                output = (1 - blending) * output + blending * model(output)
             else:
                 output = model(output)
 

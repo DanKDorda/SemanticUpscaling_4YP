@@ -38,3 +38,5 @@ for i, b in enumerate(dataset):
     plt.axis('off')
 
     plt.show()
+
+print('done')
