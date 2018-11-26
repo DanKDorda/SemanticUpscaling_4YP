@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+from torch.autograd import Variable
+
 from .base_model import BaseModel
 from util.image_pool import ImagePool
 from . import networks
@@ -9,6 +11,14 @@ class LabelUpModel(BaseModel):
 
     def name(self):
         return 'LabelUpModel'
+
+    def init_loss_filter(self, use_gan_feat_loss, use_vgg_loss):
+        flags = (True, use_gan_feat_loss, use_vgg_loss, True, True)
+
+        def loss_filter(g_gan, g_gan_feat, g_vgg, d_real, d_fake):
+            return [l for (l, f) in zip((g_gan, g_gan_feat, g_vgg, d_real, d_fake), flags) if f]
+
+        return loss_filter
 
     def __init__(self, opt):
         super(LabelUpModel, self).__init__(self, opt)
@@ -118,8 +128,13 @@ class LabelUpModel(BaseModel):
 
         return input_label, inst_map, real_image, feat_map
 
-    def discriminate(self):
-        pass
+    def discriminate(self, input_label, test_image, use_pool=False):
+        input_concat = torch.cat((input_label, test_image.detach()), dim=1)
+        if use_pool:
+            fake_query = self.fake_pool.query(input_concat)
+            return self.net_D.forward(fake_query)
+        else:
+            return self.net_D.forward(input_concat)
 
     # used in training
     def forward(self, label, inst, image, feat, phase, infer=False):
@@ -127,7 +142,10 @@ class LabelUpModel(BaseModel):
         input_label, inst_map, real_image, feat_map = self.encode_input(label, inst, image, feat)
 
         # fake generation
-        fake_image = self.net_G().forward()
+        #this here so that eventually we'll use feat
+        input_concat = input_label
+
+        fake_image = self.net_G().forward(input_concat, phase)
 
         # fake detection and loss
         pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
@@ -138,6 +156,20 @@ class LabelUpModel(BaseModel):
         loss_D_real = self.criterionGAN(pred_real, True)
 
         # more loss -> GAN passability, VGG, Label match
+
+        # GAN loss
+        pred_fake = self.netD.forward(torch.cat((input_label, fake_image), dim=1))
+        loss_G_GAN = self.criterionGAN(pred_fake, True)
+
+        loss_G_GAN_Feat = 0
+
+        # VGG feature matching loss
+        loss_G_VGG = 0
+        if not self.opt.no_vgg_loss:
+            loss_G_VGG = self.criterionVGG(fake_image, real_image) * self.opt.lambda_feat
+
+        return [self.loss_filter(loss_G_GAN, loss_G_GAN_Feat, loss_G_VGG, loss_D_real, loss_D_fake),
+                None if not infer else fake_image]
 
     # used in testing, returns only fake images
     def inference(self):
