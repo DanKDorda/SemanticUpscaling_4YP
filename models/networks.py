@@ -94,9 +94,10 @@ class GlobalGenerator(nn.Module):
         # 1 -> 64
         output = self.models[0][0](input)
         # 64 -> 64, until time comes for out, then 64 -> 64 -> 1 with blend of previous ->1
-        for n in range(1, end_phase + 1):
+        for n in range(1, end_phase):
+            print(n)
             model = self.models[n]
-            if n == end_phase:
+            if n == end_phase - 1:
                 print('out at phase: ', n)
                 output = blend_prev * self.models[n - 1][1](output) + (1 - blend_prev) * model[1](model[0](output))
             else:

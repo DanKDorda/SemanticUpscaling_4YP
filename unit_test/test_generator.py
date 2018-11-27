@@ -10,6 +10,7 @@ from models import networks
 ## make a generator
 net_G = networks.define_G(1, 1, 6)
 print('made net')
+print(len(net_G.models))
 
 ## make a dataset
 from PIL import Image
@@ -49,11 +50,13 @@ def get_phase(iter, opts):
 
     return phase, alpha
 
-print('test getPhase')
-for i in range(20):
-    print(get_phase(i, opts))
 
-print()
+def test_getPhase():
+    print('test getPhase')
+    for i in range(20):
+        print(get_phase(i, opts))
+    print()
+
 
 phase_params = []
 for iter, data in enumerate(dataset):
@@ -68,8 +71,9 @@ for iter, data in enumerate(dataset):
     #    print(i)
     fake = net_G.forward(test_im, phase, alpha)
     print('generated fake')
-    if iter == 12:
-        print(phase_params)
+    if iter == 3:
+        print('testing at max phase')
+        fake = net_G.forward(test_im, 6, 0)
         break
 
 fake = fake.detach()[0, ...]
