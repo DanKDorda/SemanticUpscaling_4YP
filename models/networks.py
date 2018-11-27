@@ -51,45 +51,63 @@ class LabelLoss():
 ################################################################################
 # Generators
 ################################################################################
+
+
+
 class GlobalGenerator(nn.Module):
     def __init__(self, input_nc, output_nc, n_phases, ngf=64, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
         assert (n_phases > 0)
         super(GlobalGenerator, self).__init__()
         self.n_phases = n_phases
         self.models = []
+        self.final_layers = []
+
+        def get_model_block(ngf, mult, norm_layer=nn.BatchNorm2d, activation=nn.ReLU(True), padding_type='reflect'):
+            # down
+            model = [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=4, stride=2, padding=2),
+                     norm_layer(ngf * mult * 2), activation]
+            # res
+            model += [ResnetBlock(ngf * 2, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
+            # up
+            model += [nn.ConvTranspose2d(ngf * mult * 2, ngf * mult, kernel_size=4, stride=2, padding=2),
+                      norm_layer(ngf * mult), activation]
+            return model
 
         activation = nn.ReLU(True)
 
-        ## add first layer
-        model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
-        self.models += nn.Sequential(*model)
+        ## add first layer 1 -> 64
+        model = [nn.Conv2d(input_nc, ngf, kernel_size=3, padding=1), norm_layer(ngf), activation]
+        out_layer = nn.Sequential(nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1))
+        self.models += [(nn.Sequential(*model), out_layer)]
         ## add layers for phases
-        for n in range(n_phases - 2):
+
+        for n in range(n_phases - 1):
             mult = 1
             # mult = 2**n
-            # down
-            model = [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1),
-                     norm_layer(ngf * mult * 2), activation]
-            # res
-            model += [ResnetBlock(ngf, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
-            # up
-            model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2), kernel_size=3, stride=2, padding=1,
-                                         output_padding=1),
-                      norm_layer(int(ngf * mult / 2)), activation]
-            self.models += nn.Sequential(*model)
+            model = get_model_block(ngf, mult, norm_layer, activation, padding_type)
+            # final 64 -> 1 layer
+            self.models += [(nn.Sequential(*model), out_layer)]
 
-        model = [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1), norm_layer(ngf), activation]
-        self.models += nn.Sequential(*model)
+    def forward(self, input, end_phase, blend_prev):
+        assert end_phase <= self.n_phases, 'phase is: {}, max: {}'.format(end_phase, self.n_phases)
 
-    def forward(self, input, phase, blending):
-        assert phase <= self.n_phases
-
-        output = self.models[0](input)
-        for idx, model in enumerate(self.models[1:phase]):
-            if idx == phase:
-                output = (1 - blending) * output + blending * model(output)
+        # 1 -> 64
+        output = self.models[0][0](input)
+        # 64 -> 64, until time comes for out, then 64 -> 64 -> 1 with blend of previous ->1
+        for n in range(1, end_phase + 1):
+            model = self.models[n]
+            if n == end_phase:
+                print('out at phase: ', n)
+                output = blend_prev * self.models[n - 1][1](output) + (1 - blend_prev) * model[1](model[0](output))
             else:
-                output = model(output)
+                output = model[0](output)
+
+        # for idx, model in enumerate(self.models[1:end_phase]):
+        #     if idx == end_phase:
+        #         output = (1 - blending) * output + blending * model(output)
+        #         break
+        #     else:
+        #         output = model(output)
 
         return output
 

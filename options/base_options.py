@@ -11,8 +11,12 @@ class BaseOptions():
         self.initialized = False
 
     def initialize(self):
-        # resolution stuff
+
+        # dan's cool options 2cool4u
         self.parser.add_argument('--target_res', type=int, default=2)
+        self.parser.add_argument('--lod_train_img', type=int, default=3000)
+        self.parser.add_argument('--lod_transition_img', type=int, default=3000)
+
 
         # experiment specifics
         self.parser.add_argument('--name', type=str, default='label2city', help='name of the experiment. It decides where to store samples and models')
