@@ -32,7 +32,7 @@ class LabelUpModel(BaseModel):
 
         ##### define network
         # generator
-        self.net_G = networks.define_G()
+        self.net_G = networks.define_G(1, 1, 6)
 
         # discriminator
         self.net_D = networks.define_D()
@@ -137,15 +137,14 @@ class LabelUpModel(BaseModel):
             return self.net_D.forward(input_concat)
 
     # used in training
-    def forward(self, label, inst, image, feat, phase, infer=False):
+    def forward(self, label, inst, image, feat, phase, blend, infer=False):
         # encode inputs
         input_label, inst_map, real_image, feat_map = self.encode_input(label, inst, image, feat)
 
         # fake generation
         #this here so that eventually we'll use feat
         input_concat = input_label
-
-        fake_image = self.net_G().forward(input_concat, phase)
+        fake_image = self.net_G().forward(input_concat, phase, blend)
 
         # fake detection and loss
         pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
