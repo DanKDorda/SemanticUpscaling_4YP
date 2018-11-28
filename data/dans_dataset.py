@@ -6,7 +6,7 @@ from data.image_folder import make_dataset
 from PIL import Image
 
 
-class AlignedDataset(BaseDataset):
+class DansDataset(BaseDataset):
     def initialize(self, opt):
         self.opt = opt
         self.root = opt.dataroot
@@ -58,12 +58,14 @@ class AlignedDataset(BaseDataset):
         trans_dict = {}
 
         for k, v in sd.items():
-            trans_dict[k + '_tensor'] = get_tensor(v)
+            trans_dict[k] = get_tensor(v)
 
         B_tensor = inst_tensor = feat_tensor = 0
         ### input B (real images)
 
         trans_dict['paths'] = 'umm not sure'
+        trans_dict['inst'] = 0
+        trans_dict['feat'] = 0
         return trans_dict
 
     def __len__(self):

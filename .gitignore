@@ -1,3 +1,5 @@
 datasets/
+*.pyc
+checkpoints/
 .idea/
 venv/

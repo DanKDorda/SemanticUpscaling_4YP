@@ -16,13 +16,15 @@ class BaseOptions():
         self.parser.add_argument('--target_res', type=int, default=2)
         self.parser.add_argument('--lod_train_img', type=int, default=3000)
         self.parser.add_argument('--lod_transition_img', type=int, default=3000)
+        self.parser.add_argument('--num_phases', type=int, default=6)
+        # self.parser.add_argument('--custom_test', action)
 
 
         # experiment specifics
-        self.parser.add_argument('--name', type=str, default='label2city', help='name of the experiment. It decides where to store samples and models')
+        self.parser.add_argument('--name', type=str, default='labelup', help='name of the experiment. It decides where to store samples and models')
         self.parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU')
         self.parser.add_argument('--checkpoints_dir', type=str, default='./checkpoints', help='models are saved here')
-        self.parser.add_argument('--model', type=str, default='pix2pixHD', help='which model to use')
+        self.parser.add_argument('--model', type=str, default='labelup', help='which model to use')
         self.parser.add_argument('--norm', type=str, default='instance', help='instance normalization or batch normalization')
         self.parser.add_argument('--use_dropout', action='store_true', help='use dropout for the generator')
         self.parser.add_argument('--data_type', default=32, type=int, choices=[8, 16, 32], help="Supported data type i.e. 8, 16, 32 bit")
@@ -33,7 +35,7 @@ class BaseOptions():
         self.parser.add_argument('--loadSize', type=int, default=1024, help='scale images to this size')
         self.parser.add_argument('--fineSize', type=int, default=512, help='then crop to this size')
         self.parser.add_argument('--label_nc', type=int, default=35, help='# of input label channels')
-        self.parser.add_argument('--input_nc', type=int, default=3, help='# of input image channels')
+        self.parser.add_argument('--input_nc', type=int, default=1, help='# of input image channels')
         self.parser.add_argument('--output_nc', type=int, default=3, help='# of output image channels')
 
         # for setting inputs

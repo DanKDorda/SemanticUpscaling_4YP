@@ -20,8 +20,9 @@ class LabelUpModel(BaseModel):
 
         return loss_filter
 
-    def __init__(self, opt):
-        super(LabelUpModel, self).__init__(self, opt)
+    def initialize(self, opt):
+        # super(LabelUpModel, self).__init__(self, opt)
+        BaseModel.initialize(self, opt)
         # this option is copied -> make
         if opt.resize_or_crop != 'none' or not opt.isTrain:  # when training at full res this causes OOM
             torch.backends.cudnn.benchmark = True
@@ -32,10 +33,11 @@ class LabelUpModel(BaseModel):
 
         ##### define network
         # generator
-        self.net_G = networks.define_G(1, 1, 6)
+        self.netG = networks.define_G(input_nc, 1, opt.num_phases, gpu_ids=self.gpu_ids)
 
         # discriminator
-        self.net_D = networks.define_D()
+        if self.isTrain:
+            self.netD = networks.define_D(1, 64, 3, gpu_ids=self.gpu_ids)
 
         # encoder for reading features, mite be useful
         if self.gen_features:
@@ -86,7 +88,8 @@ class LabelUpModel(BaseModel):
                     '------------- Only training the local enhancer network (for %d epochs) ------------' % opt.niter_fix_global)
                 print('The layers that are finetuned are ', sorted(finetune_list))
             else:
-                params = list(self.netG.parameters())
+                params = list(self.netG.models.parameters())
+                # params = list([sub_model.parameters() for model in self.netG.models for sub_model in model])
             if self.gen_features:
                 params += list(self.netE.parameters())
             self.optimizer_G = torch.optim.Adam(params, lr=opt.lr, betas=(opt.beta1, 0.999))
@@ -132,19 +135,23 @@ class LabelUpModel(BaseModel):
         input_concat = torch.cat((input_label, test_image.detach()), dim=1)
         if use_pool:
             fake_query = self.fake_pool.query(input_concat)
-            return self.net_D.forward(fake_query)
+            return self.netD.forward(fake_query)
         else:
-            return self.net_D.forward(input_concat)
+            return self.netD.forward(input_concat)
 
     # used in training
-    def forward(self, label, inst, image, feat, phase, blend, infer=False):
+    def forward(self, low_res, inst, high_res, feat, phase, blend, infer=False):
         # encode inputs
-        input_label, inst_map, real_image, feat_map = self.encode_input(label, inst, image, feat)
+        input_label, inst_map, real_image, feat_map = self.encode_input(low_res, inst, high_res, feat)
 
-        # fake generation
+        # print('the missing variables: ')
+        # print(phase, blend)
+        # print('the input image size: ', input_label.size())
+
+        #### fake generation
         #this here so that eventually we'll use feat
         input_concat = input_label
-        fake_image = self.net_G().forward(input_concat, phase, blend)
+        fake_image = self.netG.forward(input_concat, phase, blend)
 
         # fake detection and loss
         pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)

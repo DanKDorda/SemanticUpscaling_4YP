@@ -17,9 +17,9 @@ for i, b in enumerate(dataset):
     # read some vals
     print('im looopin')
 
-    s1 = b['s1_tensor']
-    s16 = b['s16_tensor']
-    s64 = b['s64_tensor']
+    s1 = b['s1']
+    s16 = b['s16']
+    s64 = b['s64']
 
     s1 = util.tensor2im(s1[0, :, :, :], normalize=False)
     s16 = util.tensor2im(s16[0, :, :, :])

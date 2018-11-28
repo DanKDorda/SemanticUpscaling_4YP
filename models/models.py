@@ -3,16 +3,17 @@
 import torch
 
 def create_model(opt):
-    if opt.model == 'pix2pixHD':
-        from .labelup_model import Pix2PixHDModel, InferenceModel
+    if opt.model == 'labelup':
+        from .labelup_model import LabelUpModel
         if opt.isTrain:
-            model = Pix2PixHDModel()
+            model = LabelUpModel()
         else:
             raise ValueError('testing mode not implemented yet')
             # model = InferenceModel()
     else:
-    	from .ui_model import UIModel
-    	model = UIModel()
+    	# from .ui_model import UIModel
+        raise ValueError('weird other mode also not implemented, choose different model option')
+    	# model = UIModel()
     model.initialize(opt)
     if opt.verbose:
         print("model [%s] was created" % (model.name()))

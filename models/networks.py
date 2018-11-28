@@ -26,9 +26,12 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 
-def define_G(input_nc, output_nc, n_phases):
+def define_G(input_nc, output_nc, n_phases, gpu_ids=[]):
     netG = GlobalGenerator(input_nc, output_nc, n_phases)
     print(netG)
+    if len(gpu_ids) > 0:
+        assert(torch.cuda.is_available())
+        netG.cuda(gpu_ids[0])
     netG.apply(weights_init)
     return netG
 
@@ -126,7 +129,7 @@ class GlobalGenerator(nn.Module):
         assert (n_phases > 0)
         super(GlobalGenerator, self).__init__()
         self.n_phases = n_phases
-        self.models = []
+        self.models = nn.ModuleList()
         self.final_layers = []
 
         def get_model_block(ngf, mult, norm_layer=nn.BatchNorm2d, activation=nn.ReLU(True), padding_type='reflect'):
@@ -145,7 +148,7 @@ class GlobalGenerator(nn.Module):
         ## add first layer 1 -> 64
         model = [nn.Conv2d(input_nc, ngf, kernel_size=3, padding=1), norm_layer(ngf), activation]
         out_layer = nn.Sequential(nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1))
-        self.models += [(nn.Sequential(*model), out_layer)]
+        self.models.append(nn.ModuleList(nn.ModuleList([nn.Sequential(*model), out_layer])))
         ## add layers for phases
 
         for n in range(n_phases - 1):
@@ -153,13 +156,13 @@ class GlobalGenerator(nn.Module):
             # mult = 2**n
             model = get_model_block(ngf, mult, norm_layer, activation, padding_type)
             # final 64 -> 1 layer
-            self.models += [(nn.Sequential(*model), out_layer)]
+            self.models.append(nn.ModuleList(nn.ModuleList([nn.Sequential(*model), out_layer])))
 
-    def forward(self, input, end_phase, blend_prev):
+    def forward(self, input_img, end_phase, blend_prev):
         assert end_phase <= self.n_phases, 'phase is: {}, max: {}'.format(end_phase, self.n_phases)
-
+        print('got to the generator forward!!')
         # 1 -> 64
-        output = self.models[0][0](input)
+        output = self.models[0][0](input_img)
         # 64 -> 64, until time comes for out, then 64 -> 64 -> 1 with blend of previous ->1
         if end_phase <= 1:
             return self.models[0][1](output)

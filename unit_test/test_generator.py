@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from data import aligned_dataset
+from data import dans_dataset
 from data import data_loader
 from options.train_options import TrainOptions
 from util import util
@@ -60,7 +60,7 @@ def test_getPhase():
 
 phase_params = []
 for iter, data in enumerate(dataset):
-    test_im = data['s64_tensor']
+    test_im = data['s64']
     t_size = test_im.size()
     #print(t_size)
     ## pass some images into the generator
