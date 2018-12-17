@@ -70,7 +70,7 @@ for iter, data in enumerate(dataset):
     # for i in net_G.state_dict():
     #    print(i)
     fake = net_G.forward(test_im, phase, alpha)
-    print('generated fake')
+    print('generated fake, with dims: ', fake.size())
     if iter == 3:
         print('testing at max phase')
         fake = net_G.forward(test_im, 6, 0)

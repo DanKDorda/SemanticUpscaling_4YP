@@ -153,8 +153,14 @@ class LabelUpModel(BaseModel):
         input_concat = input_label
         fake_image = self.netG.forward(input_concat, phase, blend)
 
+        print('')
+        print('in the training loop')
+        print('input dimnesion: ', input_concat.size())
+        print('GAN output dimension: ', fake_image.size())
+        print('')
+
         # fake detection and loss
-        pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
+        pred_fake_pool = self.discriminate(high_res, fake_image, use_pool=True)
         loss_D_fake = self.criterionGAN(pred_fake_pool, False)
 
         # Real Detection and Loss

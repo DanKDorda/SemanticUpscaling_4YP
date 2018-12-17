@@ -54,7 +54,6 @@ print('#training images = %d' % dataset_size)
 
 model = create_model(opt)
 visualizer = Visualizer(opt)
-######## UP TO HERE
 total_steps = (start_epoch - 1) * dataset_size + epoch_iter
 
 display_delta = total_steps % opt.display_freq

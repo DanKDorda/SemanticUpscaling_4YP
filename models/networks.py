@@ -256,6 +256,11 @@ class MultiscaleDiscriminator(nn.Module):
                 result.append(model[i](result[-1]))
             return result[1:]
         else:
+            print('doing the single net forward')
+            print('WE GOT INPUTS: ', input.size())
+            print('We got a model?')
+            print('')
+            print('')
             return [model(input)]
 
     def forward(self, input):
