@@ -160,7 +160,6 @@ class GlobalGenerator(nn.Module):
 
     def forward(self, input_img, end_phase, blend_prev):
         assert end_phase <= self.n_phases, 'phase is: {}, max: {}'.format(end_phase, self.n_phases)
-        print('got to the generator forward!!')
         # 1 -> 64
         output = self.models[0][0](input_img)
         # 64 -> 64, until time comes for out, then 64 -> 64 -> 1 with blend of previous ->1
@@ -168,10 +167,10 @@ class GlobalGenerator(nn.Module):
             return self.models[0][1](output)
         else:
             for n in range(1, end_phase):
-                print(n)
+                #print(n)
                 model = self.models[n]
                 if n == end_phase - 1:
-                    print('out at phase: ', n)
+                    # print('out at phase: ', n)
                     output = blend_prev * self.models[n - 1][1](output) + (1 - blend_prev) * model[1](model[0](output))
                 else:
                     output = model[0](output)
@@ -256,11 +255,6 @@ class MultiscaleDiscriminator(nn.Module):
                 result.append(model[i](result[-1]))
             return result[1:]
         else:
-            print('doing the single net forward')
-            print('WE GOT INPUTS: ', input.size())
-            print('We got a model?')
-            print('')
-            print('')
             return [model(input)]
 
     def forward(self, input):

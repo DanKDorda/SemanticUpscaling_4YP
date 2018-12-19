@@ -72,6 +72,7 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
 
         # get the phase, it goes from 1 to 6, making res training go from 64 to 32
         phase, alpha = ts.get_phase_and_blending(i, opt)
+        print('phase and alpha: ', phase, alpha)
         target_res = 's' + str(2 ** (6 - phase))
 
         # whether to collect output images
@@ -113,9 +114,9 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
 
         ### display output images
         if save_fake:
-            visuals = OrderedDict([('input_label', util.tensor2label(data['label'][0], opt.label_nc)),
-                                   ('synthesized_image', util.tensor2im(generated.data[0])),
-                                   ('real_image', util.tensor2im(data['image'][0]))])
+            visuals = OrderedDict([('input_label', util.tensor2label(data['s64'][0], opt.label_nc)),
+                                   ('synthesized_image', util.tensor2label(generated.data[0], opt.label_nc)),
+                                   ('real_image', util.tensor2label(data[target_res][0], opt.label_nc))])
             # check_labels(data['label'])
             # check_labels(util.tensor2label(data['label'][0], opt.label_nc))
             visualizer.display_current_results(visuals, epoch, total_steps)

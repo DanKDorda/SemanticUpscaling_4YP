@@ -144,20 +144,10 @@ class LabelUpModel(BaseModel):
         # encode inputs
         input_label, inst_map, real_image, feat_map = self.encode_input(low_res, inst, high_res, feat)
 
-        # print('the missing variables: ')
-        # print(phase, blend)
-        # print('the input image size: ', input_label.size())
-
         #### fake generation
         # this here so that eventually we'll use feat
         input_concat = input_label
         fake_image = self.netG.forward(input_concat, phase, blend)
-
-        print('')
-        print('in the training loop')
-        print('input dimnesion: ', input_concat.size())
-        print('GAN output dimension: ', fake_image.size())
-        print('')
 
         # fake detection and loss
         pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
