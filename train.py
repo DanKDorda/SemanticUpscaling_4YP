@@ -22,8 +22,8 @@ def run_custom_setup():
     opt.print_freq = 1
     opt.name = 'test_labelup_train'
     opt.dataroot = 'datasets/overfit_train/'
-    opt.lod_train_img = 4
-    opt.lod_transition_img = 4
+    opt.lod_train_img = 1000
+    opt.lod_transition_img = 1000
     opt.no_instance = True
 
 
@@ -71,7 +71,7 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
         epoch_iter += opt.batchSize
 
         # get the phase, it goes from 1 to 6, making res training go from 64 to 32
-        phase, alpha = ts.get_phase_and_blending(i, opt)
+        phase, alpha = ts.get_phase_and_blending(total_steps, opt)
         print('phase and alpha: ', phase, alpha)
         target_res = 's' + str(2 ** (6 - phase))
 
@@ -115,7 +115,7 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
         ### display output images
         if save_fake:
             visuals = OrderedDict([('input_label', util.tensor2label(data['s64'][0], opt.label_nc)),
-                                   ('synthesized_image', util.tensor2label(generated.data[0], opt.label_nc)),
+                                   ('synthesized_image', util.tensor2im(generated.data[0])),
                                    ('real_image', util.tensor2label(data[target_res][0], opt.label_nc))])
             # check_labels(data['label'])
             # check_labels(util.tensor2label(data['label'][0], opt.label_nc))
