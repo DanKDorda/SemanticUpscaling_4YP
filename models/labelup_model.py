@@ -37,7 +37,7 @@ class LabelUpModel(BaseModel):
 
         # discriminator
         if self.isTrain:
-            self.netD = networks.define_D(1, 64, 3, gpu_ids=self.gpu_ids)
+            self.netD = networks.define_D(36, 64, 3, gpu_ids=self.gpu_ids)
 
         # encoder for reading features, mite be useful
         if self.gen_features:
@@ -149,7 +149,7 @@ class LabelUpModel(BaseModel):
         # print('the input image size: ', input_label.size())
 
         #### fake generation
-        #this here so that eventually we'll use feat
+        # this here so that eventually we'll use feat
         input_concat = input_label
         fake_image = self.netG.forward(input_concat, phase, blend)
 
@@ -160,7 +160,7 @@ class LabelUpModel(BaseModel):
         print('')
 
         # fake detection and loss
-        pred_fake_pool = self.discriminate(high_res, fake_image, use_pool=True)
+        pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
         loss_D_fake = self.criterionGAN(pred_fake_pool, False)
 
         # Real Detection and Loss
@@ -178,7 +178,10 @@ class LabelUpModel(BaseModel):
         # VGG feature matching loss
         loss_G_VGG = 0
         if not self.opt.no_vgg_loss:
-            loss_G_VGG = self.criterionVGG(fake_image, real_image) * self.opt.lambda_feat
+            # hack together three channel input
+            loss_G_VGG = self.criterionVGG(torch.cat((fake_image, fake_image, fake_image), dim=1),
+                                           torch.cat((real_image, real_image, real_image),
+                                                     dim=1)) * self.opt.lambda_feat
 
         return [self.loss_filter(loss_G_GAN, loss_G_GAN_Feat, loss_G_VGG, loss_D_real, loss_D_fake),
                 None if not infer else fake_image]

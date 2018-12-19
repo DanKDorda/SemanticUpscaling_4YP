@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import functools
 import torch.nn as nn
-
+from torch.autograd import Variable
 
 ###############################################################################
 # Functions
