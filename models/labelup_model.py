@@ -21,9 +21,8 @@ class LabelUpModel(BaseModel):
         return loss_filter
 
     def initialize(self, opt):
-        # super(LabelUpModel, self).__init__(self, opt)
         BaseModel.initialize(self, opt)
-        # this option is copied -> make
+
         if opt.resize_or_crop != 'none' or not opt.isTrain:  # when training at full res this causes OOM
             torch.backends.cudnn.benchmark = True
         self.use_features = opt.instance_feat or opt.label_feat
