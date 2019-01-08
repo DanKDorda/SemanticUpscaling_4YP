@@ -125,22 +125,30 @@ class LabelLoss():
 # Generators
 ################################################################################
 class GlobalGenerator(nn.Module):
-    def __init__(self, input_nc, output_nc, n_phases, ngf=64, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
+    def __init__(self, input_nc, output_nc, n_phases, ngf=64, norm_layer=nn.BatchNorm2d, padding_type='reflect', res_blocks=1):
         assert (n_phases > 0)
         super(GlobalGenerator, self).__init__()
         self.n_phases = n_phases
         self.models = nn.ModuleList()
         self.final_layers = []
 
-        def get_model_block(ngf, mult, norm_layer=nn.BatchNorm2d, activation=nn.ReLU(True), padding_type='reflect'):
+        def get_model_block(ngf, mult, res_blocks, norm_layer=nn.BatchNorm2d, activation=nn.ReLU(True), padding_type='reflect', use_scaling=True):
             # down
-            model = [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=4, stride=2, padding=2),
-                     norm_layer(ngf * mult * 2), activation]
+            if use_scaling:
+                model = [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=4, stride=2, padding=2),
+                         norm_layer(ngf * mult * 2), activation]
+            else:
+                model = []
+
             # res
-            model += [ResnetBlock(ngf * 2, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
+            for i in range(res_blocks):
+                model += [ResnetBlock(ngf * 2, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
+
             # up
-            model += [nn.ConvTranspose2d(ngf * mult * 2, ngf * mult, kernel_size=4, stride=2, padding=2),
-                      norm_layer(ngf * mult), activation]
+            if use_scaling:
+                model += [nn.ConvTranspose2d(ngf * mult * 2, ngf * mult, kernel_size=4, stride=2, padding=2),
+                          norm_layer(ngf * mult), activation]
+
             return model
 
         activation = nn.ReLU(True)
@@ -154,7 +162,7 @@ class GlobalGenerator(nn.Module):
         for n in range(n_phases - 1):
             mult = 1
             # mult = 2**n
-            model = get_model_block(ngf, mult, norm_layer, activation, padding_type)
+            model = get_model_block(ngf, mult, res_blocks, norm_layer, activation, padding_type)
             # final 64 -> 1 layer
             self.models.append(nn.ModuleList(nn.ModuleList([nn.Sequential(*model), out_layer])))
 
