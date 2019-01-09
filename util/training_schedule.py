@@ -13,4 +13,6 @@ def get_phase_and_blending(iter, opt):
 
     assert 0 <= alpha <= 1
 
-    return phase, alpha
+    target_res = 's' + str(2 ** (opt.num_phases - phase))
+
+    return phase, alpha, target_res
