@@ -170,12 +170,12 @@ class GlobalGenerator(nn.Module):
 
         activation = nn.LeakyReLU(inplace=True)
 
-        ## add first layer 1 -> 64
+        ## add first layer 1 -> 64, which is kinda like a feature extractor?? Is first layer
         model = [nn.Conv2d(input_nc, ngf, kernel_size=3, padding=1), norm_layer(ngf), activation]
         out_layer = nn.Sequential(nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1), nn.Tanh())
         self.models.append(nn.ModuleList(nn.ModuleList([nn.Sequential(*model), out_layer])))
-        ## add layers for phases
 
+        ## add layers for phases
         for n in range(n_phases - 1):
             mult = 1
             # mult = 2**n
@@ -186,6 +186,13 @@ class GlobalGenerator(nn.Module):
                  nn.Sequential(nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1), nn.Tanh())])))
 
     def forward(self, input_img, end_phase, blend_prev):
+        """
+
+        :param input_img: Is it one layer or 35 layer?
+        :param end_phase:
+        :param blend_prev:
+        :return:
+        """
         assert end_phase <= self.n_phases, 'phase is: {}, max: {}'.format(end_phase, self.n_phases)
         # 64 -> 64, until time comes for out, then 64 -> 64 -> 1 with blend of previous ->1
         # start on phase 1

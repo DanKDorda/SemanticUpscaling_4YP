@@ -76,6 +76,8 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
         if opt.debug:
             print('phase and alpha: ', phase, alpha)
 
+        print('phase and alpha: ', phase, alpha)
+        print('inferring :', target_res)
         # whether to collect output images
         save_fake = total_steps % opt.display_freq == display_delta
 
