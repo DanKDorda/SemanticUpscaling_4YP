@@ -4,6 +4,7 @@ import functools
 import torch.nn as nn
 from torch.autograd import Variable
 
+
 ###############################################################################
 # Functions
 ###############################################################################
@@ -26,17 +27,17 @@ def get_norm_layer(norm_type='instance'):
     return norm_layer
 
 
-def define_G(input_nc, output_nc, n_phases, gpu_ids=[]):
-    netG = GlobalGenerator(input_nc, output_nc, n_phases)
+def define_G(input_nc, output_nc, n_phases, gpu_ids=[], res_blocks=1):
+    netG = GlobalGenerator(input_nc, output_nc, n_phases, res_blocks=res_blocks)
     print(netG)
     if len(gpu_ids) > 0:
-        assert(torch.cuda.is_available())
+        assert (torch.cuda.is_available())
         netG.cuda(gpu_ids[0])
     netG.apply(weights_init)
     return netG
 
 
-def define_D(input_nc, ndf, n_layers_D, norm='instance', use_sigmoid=False, num_D=1, getIntermFeat=False, gpu_ids=[]):
+def define_D(input_nc, ndf, n_layers_D, norm='instance', use_sigmoid=False, num_D=2, getIntermFeat=False, gpu_ids=[]):
     norm_layer = get_norm_layer(norm_type=norm)
     netD = MultiscaleDiscriminator(input_nc, ndf, n_layers_D, norm_layer, use_sigmoid, num_D, getIntermFeat)
     print(netD)
@@ -98,12 +99,13 @@ class GANLoss(nn.Module):
             target_tensor = self.get_target_tensor(input[-1], target_is_real)
             return self.loss(input[-1], target_tensor)
 
+
 class VGGLoss(nn.Module):
     def __init__(self, gpu_ids):
         super(VGGLoss, self).__init__()
         self.vgg = Vgg19().cuda()
         self.criterion = nn.L1Loss()
-        self.weights = [1.0/32, 1.0/16, 1.0/8, 1.0/4, 1.0]
+        self.weights = [1.0 / 32, 1.0 / 16, 1.0 / 8, 1.0 / 4, 1.0]
 
     def forward(self, x, y):
         x_vgg, y_vgg = self.vgg(x), self.vgg(y)
@@ -124,15 +126,20 @@ class LabelLoss():
 ################################################################################
 # Generators
 ################################################################################
+
+# inside of here, network takes a 35 layer one hot, transforms it into a higher res 35 layer big daddy, then uses a separate network to transform it into a 1 layer meaty bad boy
+# what
 class GlobalGenerator(nn.Module):
-    def __init__(self, input_nc, output_nc, n_phases, ngf=64, norm_layer=nn.BatchNorm2d, padding_type='reflect', res_blocks=1):
+    def __init__(self, input_nc, output_nc, n_phases, ngf=64, norm_layer=nn.BatchNorm2d, padding_type='reflect',
+                 res_blocks=1):
         assert (n_phases > 0)
         super(GlobalGenerator, self).__init__()
         self.n_phases = n_phases
         self.models = nn.ModuleList()
         self.final_layers = []
 
-        def get_model_block(ngf, mult, res_blocks, norm_layer=nn.BatchNorm2d, activation=nn.ReLU(True), padding_type='reflect', use_scaling=True):
+        def get_model_block(ngf, mult, res_blocks, norm_layer=nn.BatchNorm2d, activation=nn.ReLU(True),
+                            padding_type='reflect', use_scaling=True):
             # down
             if use_scaling:
                 model = [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=4, stride=2, padding=2),
@@ -151,11 +158,11 @@ class GlobalGenerator(nn.Module):
 
             return model
 
-        activation = nn.ReLU(True)
+        activation = nn.LeakyReLU(inplace=True)
 
         ## add first layer 1 -> 64
         model = [nn.Conv2d(input_nc, ngf, kernel_size=3, padding=1), norm_layer(ngf), activation]
-        out_layer = nn.Sequential(nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1))
+        out_layer = nn.Sequential(nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1), nn.Tanh())
         self.models.append(nn.ModuleList(nn.ModuleList([nn.Sequential(*model), out_layer])))
         ## add layers for phases
 
@@ -164,33 +171,54 @@ class GlobalGenerator(nn.Module):
             # mult = 2**n
             model = get_model_block(ngf, mult, res_blocks, norm_layer, activation, padding_type)
             # final 64 -> 1 layer
-            self.models.append(nn.ModuleList(nn.ModuleList([nn.Sequential(*model), out_layer])))
+            self.models.append(nn.ModuleList(nn.ModuleList(
+                [nn.Sequential(*model),
+                 nn.Sequential(nn.Conv2d(ngf, output_nc, kernel_size=3, padding=1), nn.Tanh())])))
 
     def forward(self, input_img, end_phase, blend_prev):
         assert end_phase <= self.n_phases, 'phase is: {}, max: {}'.format(end_phase, self.n_phases)
+        # 64 -> 64, until time comes for out, then 64 -> 64 -> 1 with blend of previous ->1
+        # start on phase 1
+        # want to predict the x2 detailed image
+        # pass it through:
+        # input convs models [0][0]
+        # model resnet blocks models [1][0]
+        # here choice - if phase = 1, thru models [1][1]
+        # if if phase = 2, go to x1, through models [2][0] then out models[2][1]
+
         # 1 -> 64
         output = self.models[0][0](input_img)
-        # 64 -> 64, until time comes for out, then 64 -> 64 -> 1 with blend of previous ->1
+
+        # if you're just starting, train the outlayer from 1-64-1
+        # sounds kinda like bunk
+        """
         if end_phase <= 1:
             return self.models[0][1](output)
+            else:
+           
+        """
+        # so start at phase 1
+        #
+        for n in range(1, end_phase):
+            # print(n)
+            model = self.models[n]
+            output = model[0](output)
+            # at the start, train only the previous layer, cause blend is 1
+            # print('out at phase: ', n)
+            # start at end_phase 1
+            # train model[0] until you start blending
+
+        # the output blending magick
+
+        if self.n_phases == end_phase:
+            final_model = self.models[end_phase - 1]
+            output = final_model[1](output)
         else:
-            for n in range(1, end_phase):
-                #print(n)
-                model = self.models[n]
-                if n == end_phase - 1:
-                    # print('out at phase: ', n)
-                    output = blend_prev * self.models[n - 1][1](output) + (1 - blend_prev) * model[1](model[0](output))
-                else:
-                    output = model[0](output)
+            model = self.models[end_phase]
+            prev_model = self.models[end_phase - 1]
+            output = blend_prev * prev_model[1](output) + (1 - blend_prev) * model[1](model[0](output))
 
-            # for idx, model in enumerate(self.models[1:end_phase]):
-            #     if idx == end_phase:
-            #         output = (1 - blending) * output + blending * model(output)
-            #         break
-            #     else:
-            #         output = model(output)
-
-            return output
+        return output
 
 
 class ResnetBlock(nn.Module):
@@ -280,6 +308,7 @@ class MultiscaleDiscriminator(nn.Module):
                 input_downsampled = self.downsample(input_downsampled)
         return result
 
+
 class NLayerDiscriminator(nn.Module):
     def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, use_sigmoid=False, getIntermFeat=False):
         super(NLayerDiscriminator, self).__init__()
@@ -331,10 +360,13 @@ class NLayerDiscriminator(nn.Module):
         else:
             return self.model(input)
 
+
 ################################################################################
 # Zoo
 ################################################################################
 from torchvision import models
+
+
 class Vgg19(torch.nn.Module):
     def __init__(self, requires_grad=False):
         super(Vgg19, self).__init__()

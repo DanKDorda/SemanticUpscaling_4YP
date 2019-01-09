@@ -18,16 +18,17 @@ opt = TrainOptions().parse()
 iter_path = os.path.join(opt.checkpoints_dir, opt.name, 'iter.txt')
 
 
-def run_custom_setup():
+def run_pycharm_debug():
     opt.print_freq = 1
-    opt.name = 'test_labelup_train'
+    opt.name = 'PYCHARM_TESTS'
     opt.dataroot = 'datasets/overfit_train/'
-    opt.lod_train_img = 1000
-    opt.lod_transition_img = 1000
+    opt.lod_train_img = 500
+    opt.lod_transition_img = 500
     opt.no_instance = True
+    opt.no_vgg_loss = False
+    opt.num_phases = 2
 
-
-run_custom_setup()
+run_pycharm_debug()
 
 # no continue training functionality yet
 if opt.continue_train:
@@ -70,17 +71,18 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
         total_steps += opt.batchSize
         epoch_iter += opt.batchSize
 
-        # get the phase, it goes from 1 to 6, making res training go from 64 to 32
-        phase, alpha = ts.get_phase_and_blending(total_steps, opt)
-        print('phase and alpha: ', phase, alpha)
-        target_res = 's' + str(2 ** (6 - phase))
+        # get the phase, it goes from 1 to 6, making res training go from 64 to 32 /// doubt
+        phase, alpha, target_res = ts.get_phase_and_blending(total_steps, opt)
+        if opt.debug:
+            print('phase and alpha: ', phase, alpha)
 
         # whether to collect output images
         save_fake = total_steps % opt.display_freq == display_delta
-        # check_labels(data['label'])
+
+        # check unique values in input tensor -> all values in the output should be from this set
 
         ############## Forward Pass ######################
-        losses, generated = model(data['s64'].requires_grad_(True), data['inst'],
+        losses, generated = model(data['s4'].requires_grad_(True), data['inst'],
                                   data[target_res].requires_grad_(True), data['feat'], phase=phase, blend=alpha, infer=save_fake)
 
         # sum per device losses
@@ -114,7 +116,7 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
 
         ### display output images
         if save_fake:
-            visuals = OrderedDict([('input_label', util.tensor2label(data['s64'][0], opt.label_nc)),
+            visuals = OrderedDict([('input_label', util.tensor2label(data['s4'][0], opt.label_nc)),
                                    ('synthesized_image', util.tensor2im(generated.data[0])),
                                    ('real_image', util.tensor2label(data[target_res][0], opt.label_nc))])
             # check_labels(data['label'])

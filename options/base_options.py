@@ -17,6 +17,7 @@ class BaseOptions():
         self.parser.add_argument('--lod_train_img', type=int, default=3000)
         self.parser.add_argument('--lod_transition_img', type=int, default=3000)
         self.parser.add_argument('--num_phases', type=int, default=6)
+        self.parser.add_argument('--num_res_blocks', type=int, default=2)
         # self.parser.add_argument('--custom_test', action)
 
 

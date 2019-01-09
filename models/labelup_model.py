@@ -33,7 +33,7 @@ class LabelUpModel(BaseModel):
 
         ##### define network
         # generator
-        self.netG = networks.define_G(input_nc, 1, opt.num_phases, gpu_ids=self.gpu_ids)
+        self.netG = networks.define_G(input_nc, 1, opt.num_phases, gpu_ids=self.gpu_ids, res_blocks=opt.num_res_blocks)
 
         # discriminator
         if self.isTrain:
@@ -147,7 +147,15 @@ class LabelUpModel(BaseModel):
         #### fake generation
         # this here so that eventually we'll use feat
         input_concat = input_label
+        size_for_debug = input_concat.size()
+
+        # output is (batch, 1, resolution), dtype float32
         fake_image = self.netG.forward(input_concat, phase, blend)
+
+        # OR
+        # there's two generators
+        # one does the 35 -> 35
+        # the other does the 35 -> 1
 
         # fake detection and loss
         pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
