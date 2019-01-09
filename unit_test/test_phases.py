@@ -3,13 +3,12 @@ from util.training_schedule import get_phase_and_blending
 class mock_options:
 
     def __init__(self):
-        self.lod_transition_img = 10
-        self.lod_train_img = 10
-        self.num_phases = 2
+        self.lod_transition_img = 5
+        self.lod_train_img = 5
+        self.num_phases = 6
 
 
 opt = mock_options()
-for i in range(110):
-    phase, alpha = get_phase_and_blending(i, opt)
-    target_res = 2**(opt.num_phases-phase)
+for i in range(130):
+    phase, alpha, target_res = get_phase_and_blending(i, opt)
     print('phase {}, alpha {}, target res: {}'.format(phase, alpha, target_res))

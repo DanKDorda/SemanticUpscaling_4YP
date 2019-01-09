@@ -13,10 +13,10 @@ class LabelUpModel(BaseModel):
         return 'LabelUpModel'
 
     def init_loss_filter(self, use_gan_feat_loss, use_vgg_loss):
-        flags = (True, use_gan_feat_loss, use_vgg_loss, True, True)
+        flags = (True, use_gan_feat_loss, use_vgg_loss, True, True, True, True, True)
 
-        def loss_filter(g_gan, g_gan_feat, g_vgg, d_real, d_fake):
-            return [l for (l, f) in zip((g_gan, g_gan_feat, g_vgg, d_real, d_fake), flags) if f]
+        def loss_filter(g_gan, g_gan_feat, g_vgg, d_real, d_fake, d_real_oc, d_fake_oc, loss_G_GLU):
+            return [l for (l, f) in zip((g_gan, g_gan_feat, g_vgg, d_real, d_fake, d_real_oc, d_fake_oc, loss_G_GLU), flags) if f]
 
         return loss_filter
 
@@ -30,14 +30,20 @@ class LabelUpModel(BaseModel):
         self.gen_features = self.use_features and not self.opt.load_features
         self.isTrain = opt.isTrain
         input_nc = opt.label_nc if opt.label_nc != 0 else opt.input_nc
+        input_set = None
 
         ##### define network
-        # generator
-        self.netG = networks.define_G(input_nc, 1, opt.num_phases, gpu_ids=self.gpu_ids, res_blocks=opt.num_res_blocks)
+        # generators
+        # net that makes 35 shitty layers into 35 glorious hi-def layers
+        self.netG_multichan = networks.define_G(input_nc, input_nc, opt.num_phases, gpu_ids=self.gpu_ids,
+                                                res_blocks=opt.num_res_blocks)
+        # net that takes those 35 glorious layers and sticks 'em all together into a legit semantic map
+        self.netG_glue = networks.define_GlueNet(input_nc, input_set, gpu_ids=self.gpu_ids)
 
         # discriminator
         if self.isTrain:
-            self.netD = networks.define_D(36, 64, 3, gpu_ids=self.gpu_ids)
+            self.netD = networks.define_D(input_nc, 64, 3, gpu_ids=self.gpu_ids)  # i feel like this should be 35...
+            self.netD_glue = networks.define_D(1, 64, 3, gpu_ids=self.gpu_ids)
 
         # encoder for reading features, mite be useful
         if self.gen_features:
@@ -49,7 +55,7 @@ class LabelUpModel(BaseModel):
         # load networks -> inside G there numPhases blocks
         if not self.isTrain or opt.continue_train or opt.load_pretrain:
             pretrained_path = '' if not self.isTrain else opt.load_pretrain
-            self.load_network(self.netG, 'G', opt.which_epoch, pretrained_path)
+            self.load_network(self.netG_multichan, 'G', opt.which_epoch, pretrained_path)
             if self.isTrain:
                 self.load_network(self.netD, 'D', opt.which_epoch, pretrained_path)
             if self.gen_features:
@@ -73,12 +79,12 @@ class LabelUpModel(BaseModel):
                 self.criterionVGG = networks.VGGLoss(self.gpu_ids)
 
             # Names so we can breakout loss
-            self.loss_names = self.loss_filter('G_GAN', 'G_GAN_Feat', 'G_VGG', 'D_real', 'D_fake')
+            self.loss_names = self.loss_filter('G_GAN', 'G_GAN_Feat', 'G_VGG', 'D_real', 'D_fake', 'D_real_OC', 'D_fake_OC', 'loss_G_GLU')
 
             # optimizer G -> not sure what the first bit does, but apparently not all of the generator is trained at once
             if opt.niter_fix_global > 0:
                 finetune_list = set()
-                params_dict = dict(self.netG.named_parameters())
+                params_dict = dict(self.netG_multichan.named_parameters())
                 params = []
                 for key, value in params_dict.items():
                     if key.startswith('model' + str(opt.n_local_enhancers)):
@@ -88,7 +94,7 @@ class LabelUpModel(BaseModel):
                     '------------- Only training the local enhancer network (for %d epochs) ------------' % opt.niter_fix_global)
                 print('The layers that are finetuned are ', sorted(finetune_list))
             else:
-                params = list(self.netG.models.parameters())
+                params = list(self.netG_multichan.models.parameters())
                 # params = list([sub_model.parameters() for model in self.netG.models for sub_model in model])
             if self.gen_features:
                 params += list(self.netE.parameters())
@@ -97,6 +103,14 @@ class LabelUpModel(BaseModel):
             # optimizer D
             params = list(self.netD.parameters())
             self.optimizer_D = torch.optim.Adam(params, lr=opt.lr, betas=(opt.beta1, 0.999))
+
+            #optimizer G_glue
+            params = list(self.netG_glue.models.parameters())
+            self.optimizer_G_glue = torch.optim.Adam(params, lr=opt.lr, betas=(opt.beta1, 0.999))
+
+            #optimizer D_glue
+            params = list(self.netD_glue.parameters())
+            self.optimizer_D_glue = torch.optim.Adam(params, lr=opt.lr, betas=(opt.beta1, 0.999))
 
     def encode_input(self, label_map, inst_map=None, real_image=None, feat_map=None, infer=False):
         if self.opt.label_nc == 0:
@@ -131,13 +145,13 @@ class LabelUpModel(BaseModel):
 
         return input_label, inst_map, real_image, feat_map
 
-    def discriminate(self, input_label, test_image, use_pool=False):
+    def discriminate(self, input_label, test_image, net, use_pool=False):
         input_concat = torch.cat((input_label, test_image.detach()), dim=1)
         if use_pool:
             fake_query = self.fake_pool.query(input_concat)
-            return self.netD.forward(fake_query)
+            return net.forward(fake_query)
         else:
-            return self.netD.forward(input_concat)
+            return net.forward(input_concat)
 
     # used in training
     def forward(self, low_res, inst, high_res, feat, phase, blend, infer=False):
@@ -147,42 +161,58 @@ class LabelUpModel(BaseModel):
         #### fake generation
         # this here so that eventually we'll use feat
         input_concat = input_label
-        size_for_debug = input_concat.size()
 
-        # output is (batch, 1, resolution), dtype float32
-        fake_image = self.netG.forward(input_concat, phase, blend)
+        # output is (batch, 35, resolution), dtype float32
+        fake_onehots = self.netG_multichan.forward(input_concat, phase, blend)
 
-        # OR
-        # there's two generators
-        # one does the 35 -> 35
-        # the other does the 35 -> 1
+        # output is (batch, 1, resolution), with values of the semantic elements
+        fake_one_layer = self.netG_glue(fake_onehots)
 
-        # fake detection and loss
-        pred_fake_pool = self.discriminate(input_label, fake_image, use_pool=True)
+        # NEW LOSS
+        # there's loss for the 35 layer dingo, to tell it apart from the one hot high res dingo
+        # there's loss for the final 1 layer image, to tell it apart from the final image
+        # these are both discriminators for the fakes
+        # so we have two discriminators now yeaa!
+        #HMM but we're using the same fake pool so idk what's up with that
+
+        ### fake detection and loss
+        # its multi_layer_bro
+        pred_fake_pool = self.discriminate(input_label, fake_onehots, self.netD, use_pool=True)
         loss_D_fake = self.criterionGAN(pred_fake_pool, False)
+        # it's single layer ho
+        pred_fake_pool_onechan = self.netD_glue.forward(torch.cat(low_res, fake_one_layer))
+        loss_D_fake_onechan = self.criterionGAN(pred_fake_pool_onechan, False)
 
         # Real Detection and Loss
+        # do I need two here? I'm not really sure, but fuck it why not
         pred_real = self.discriminate(input_label, real_image)
         loss_D_real = self.criterionGAN(pred_real, True)
+        #onechan mode
+        pred_real_onechan = self.netD_glue.forward(torch.cat(input_label, real_image))
+        loss_D_real_onechan = self.criterionGAN(pred_real_onechan, True)
+
 
         # more loss -> GAN passability, VGG, Label match
 
-        # GAN loss
-        pred_fake = self.netD.forward(torch.cat((input_label, fake_image), dim=1))
+        # GAN loss do we even need this seperate fucker here tho?????????
+        pred_fake = self.netD.forward(torch.cat((input_label, fake_onehots), dim=1))
         loss_G_GAN = self.criterionGAN(pred_fake, True)
 
+        # GAN loss for the GlueGAN
+        pred_fake = self.netD_glue.forward(torch.cat(low_res, fake_one_layer), dim=1)
+        loss_G_GLU = self.criterionGAN(pred_fake, True)
         loss_G_GAN_Feat = 0
 
         # VGG feature matching loss
         loss_G_VGG = 0
         if not self.opt.no_vgg_loss:
             # hack together three channel input
-            loss_G_VGG = self.criterionVGG(torch.cat((fake_image, fake_image, fake_image), dim=1),
+            loss_G_VGG = self.criterionVGG(torch.cat((fake_one_layer, fake_one_layer, fake_one_layer), dim=1),
                                            torch.cat((real_image, real_image, real_image),
                                                      dim=1)) * self.opt.lambda_feat
 
-        return [self.loss_filter(loss_G_GAN, loss_G_GAN_Feat, loss_G_VGG, loss_D_real, loss_D_fake),
-                None if not infer else fake_image]
+        return [self.loss_filter(loss_G_GAN, loss_G_GAN_Feat, loss_G_VGG, loss_D_real, loss_D_fake, loss_D_real_onechan, loss_D_fake_onechan, loss_G_GLU),
+                None if not infer else fake_onehots]
 
     # used in testing, returns only fake images
     def inference(self):
@@ -202,7 +232,7 @@ class LabelUpModel(BaseModel):
 
     def update_fixed_params(self):
         # after fixing the global generator for a number of iterations, also start finetuning it
-        params = list(self.netG.parameters())
+        params = list(self.netG_multichan.parameters())
         if self.gen_features:
             params += list(self.netE.parameters())
         self.optimizer_G = torch.optim.Adam(params, lr=self.opt.lr, betas=(self.opt.beta1, 0.999))

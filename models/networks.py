@@ -37,6 +37,16 @@ def define_G(input_nc, output_nc, n_phases, gpu_ids=[], res_blocks=1):
     return netG
 
 
+def define_GlueNet(input_nc, label_set, gpu_ids=[]):
+    netGlue = GlueGenerator(input_nc, label_set)
+    print(netGlue)
+    if len(gpu_ids) > 0:
+        assert (torch.cuda.is_available())
+        netGlue.cuda(gpu_ids[0])
+    netGlue.apply(weights_init)
+    return netGlue
+
+
 def define_D(input_nc, ndf, n_layers_D, norm='instance', use_sigmoid=False, num_D=2, getIntermFeat=False, gpu_ids=[]):
     norm_layer = get_norm_layer(norm_type=norm)
     netD = MultiscaleDiscriminator(input_nc, ndf, n_layers_D, norm_layer, use_sigmoid, num_D, getIntermFeat)
@@ -185,40 +195,47 @@ class GlobalGenerator(nn.Module):
         # model resnet blocks models [1][0]
         # here choice - if phase = 1, thru models [1][1]
         # if if phase = 2, go to x1, through models [2][0] then out models[2][1]
+        # so start at phase 1
+        # at the start, train only the previous layer, cause blend is 1
+        # print('out at phase: ', n)
+        # start at end_phase 1
+        # train model[0] until you start blending
 
-        # 1 -> 64
+        # 35 -> 64
         output = self.models[0][0](input_img)
 
-        # if you're just starting, train the outlayer from 1-64-1
-        # sounds kinda like bunk
-        """
-        if end_phase <= 1:
-            return self.models[0][1](output)
-            else:
-           
-        """
-        # so start at phase 1
-        #
         for n in range(1, end_phase):
-            # print(n)
             model = self.models[n]
             output = model[0](output)
-            # at the start, train only the previous layer, cause blend is 1
-            # print('out at phase: ', n)
-            # start at end_phase 1
-            # train model[0] until you start blending
 
         # the output blending magick
-
         if self.n_phases == end_phase:
-            final_model = self.models[end_phase - 1]
-            output = final_model[1](output)
-        else:
-            model = self.models[end_phase]
-            prev_model = self.models[end_phase - 1]
-            output = blend_prev * prev_model[1](output) + (1 - blend_prev) * model[1](model[0](output))
+            end_phase = end_phase - 1
+            # final_model = self.models[end_phase - 1]
+            # output = final_model[1](output)
+
+        model = self.models[end_phase]
+        prev_model = self.models[end_phase - 1]
+        output = blend_prev * prev_model[1](output) + (1 - blend_prev) * model[1](model[0](output))
 
         return output
+
+
+class GlueGenerator(nn.module):
+    def __init__(self, input_nc, label_set):
+        self.label_set = label_set  # a list(?) of allowed label values
+
+        self.model = nn.Conv2d(input_nc, 1, kernel_size=3, stride=1, padding=1)    # a convnet or something
+
+    # receive 35 chan input
+    def forward(self, input_img):
+
+        # use a conv net to look at a point
+        # decide which class point is gonna be
+        # by predicting a one hot, indicating which element of label set to choose from
+        # do for all pixels
+        result = None
+        return result
 
 
 class ResnetBlock(nn.Module):

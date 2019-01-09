@@ -92,6 +92,8 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
         # calculate final loss scalar
         loss_D = (loss_dict['D_fake'] + loss_dict['D_real']) * 0.5
         loss_G = loss_dict['G_GAN'] + loss_dict.get('G_GAN_Feat', 0) + loss_dict.get('G_VGG', 0)
+        loss_G_glue = loss_dict['loss_G_GLU']
+        loss_D_glue = (loss_dict['D_fake_OC'] + loss_dict['D_real_OC']) * 0.5
 
         ############### Backward Pass ####################
         # update generator weights
@@ -99,10 +101,18 @@ for epoch in range(start_epoch, opt.niter + opt.niter_decay + 1):
         loss_G.backward()
         model.module.optimizer_G.step()
 
+        model.module.optimizer_G_glue.zero_grad()
+        loss_G_glue.backward()
+        model.module.optimizer_G_glue.step()
+
         # update discriminator weights
         model.module.optimizer_D.zero_grad()
         loss_D.backward()
         model.module.optimizer_D.step()
+
+        model.module.optimizer_D_glue.zero_grad()
+        loss_D_glue.backward()
+        model.module.optimizer_D_glue.step()
 
         # call(["nvidia-smi", "--format=csv", "--query-gpu=memory.used,memory.free"])
 
