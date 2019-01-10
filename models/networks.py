@@ -229,14 +229,22 @@ class GlobalGenerator(nn.Module):
 
 
 class GlueGenerator(nn.module):
-    def __init__(self, input_nc, label_set):
-        self.label_set = label_set  # a list(?) of allowed label values
+    def __init__(self, input_nc, label_set_global):
+        self.label_set_global = label_set_global  # a list(?) of allowed label values
+        self.num_labels = len(label_set_global)
 
-        self.model = nn.Conv2d(input_nc, 1, kernel_size=3, stride=1, padding=1)    # a convnet or something
+        lin_in = 1024
+        # encode the input label set so that the bangaroos are conditioned on it
+        # the encoder input technically varies in length. It's possible to pad it with -1s or something if it's empty
+        # but maybe there's a better way
+        self.encoder = None
+        self.model = nn.Conv2d(input_nc + 1, 1, kernel_size=3, stride=1, padding=1)    # a convnet or something
+        self.label_predictor = nn.Linear(lin_in, self.num_labels)
 
     # receive 35 chan input
-    def forward(self, input_img):
+    def forward(self, input_img, label_set_local):
 
+        # use something like StackedGAN to make an embedding of label_set_local to attach to the convnet input
         # use a conv net to look at a point
         # decide which class point is gonna be
         # by predicting a one hot, indicating which element of label set to choose from
